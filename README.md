@@ -73,7 +73,7 @@ GHCR 和 Release 预构建镜像仅包含 amd64，其他架构可从源码构建
 
 ## 网关手机配网
 
-网关 0.3.1 首次上电开启 `epapers-xxxxxx` 开放配网热点，手机连接不需要密码。手机连接后打开 `http://192.168.4.1`，填写家中 2.4GHz Wi-Fi、电脑或群晖的工作台地址及 `EPAPERS_GATEWAY_TOKEN`，点击“保存并连接”。持续连接工作台 60 秒后关闭热点；运行时长按 BOOT 3 秒可再次开启。完整流程见 [手机配网](docs/gateway-phone-setup.md)。
+网关 0.3.2 首次上电开启 `epapers-xxxxxx` 开放配网热点，手机连接不需要密码。连接后通过联网检测跳转到配网页面；也可手动打开 `http://192.168.4.1`，填写家中 2.4GHz Wi-Fi、电脑或群晖的工作台地址及 `EPAPERS_GATEWAY_TOKEN`，点击“保存并连接”。持续连接工作台 60 秒后关闭热点；运行时长按 BOOT 3 秒可再次开启。0.3.2 修复了热点可连接但网页拒绝连接的问题。完整流程见 [手机配网](docs/gateway-phone-setup.md)。
 
 ## HA 集成
 
@@ -83,7 +83,7 @@ GHCR 和 Release 预构建镜像仅包含 amd64，其他架构可从源码构建
 
 - 网关源码：`firmware/gateway`；构建脚本：`scripts/build_gateway.sh`。需要本机 ESP-IDF 环境。
 - DA14585 源码覆盖层：`firmware/tag/src`；构建脚本：`scripts/build_tag.py`。需自行取得官方 SDK6，并用 `--sdk` 和 `--toolchain` 指定 SDK 与 GNU Arm 工具链。
-- 首次有线安装后，墨水屏可通过网页 → 网关 → BLE SUOTA 升级。原部署包提供网关 0.3.0、墨水屏 0.3.1 和墨水屏 0.3.0 回退镜像；Release 另提供手机配网网关更新 `epapers-gateway-0.3.1.bin`。
+- 首次有线安装后，墨水屏可通过网页 → 网关 → BLE SUOTA 升级。原部署包提供网关 0.3.0、墨水屏 0.3.1 和墨水屏 0.3.0 回退镜像；[网关 0.3.2 Release](https://github.com/ddgsdde/epapers/releases/tag/gateway-v0.3.2) 提供修复版手机配网网关更新 `epapers-gateway-0.3.2.bin`。
 - 项目不包含官方 SDK、用户提供的参考固件、本机凭据、用户数据或原始硬件备份。字体授权文件与字体一起保存于 `assets/fonts`。
 
 测试与构建：
@@ -94,6 +94,6 @@ uv run ruff check backend tests
 npm --prefix frontend run build
 ```
 
-当前记录：149 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
+当前记录：183 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。网关手机配网修复增加热点接口、HTTP / DNS 状态和请求计数诊断。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
 
 参考项目：[tpunix/HMCLOCK](https://github.com/tpunix/HMCLOCK)。

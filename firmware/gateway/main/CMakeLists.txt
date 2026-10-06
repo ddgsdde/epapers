@@ -1,2 +1,2 @@
-idf_component_register(SRCS "gateway.c" "ble.c" "ota.c" "network.c" "network_config.c" "../../common/ep_core.c" INCLUDE_DIRS "." "../../common" REQUIRES app_update esp_app_format bt nvs_flash esp_wifi esp_netif esp_event esp_timer cjson mbedtls esp_websocket_client esp_http_server esp_driver_gpio http_parser EMBED_TXTFILES "setup.html")
+idf_component_register(SRCS "gateway.c" "ble.c" "ota.c" "network.c" "network_config.c" "captive_portal.c" "../../common/ep_core.c" INCLUDE_DIRS "." "../../common" REQUIRES app_update esp_app_format bt nvs_flash esp_wifi esp_netif esp_event esp_timer cjson mbedtls esp_websocket_client esp_http_server esp_driver_gpio http_parser EMBED_TXTFILES "setup.html")
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-misleading-indentation)

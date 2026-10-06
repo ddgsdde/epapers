@@ -1,5 +1,6 @@
 #include "network.h"
 #include "network_config.h"
+#include "captive_portal.h"
 #include "gateway.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,12 +31,18 @@ static httpd_handle_t server;
 static void (*receive_message)(cJSON *);
 static void (*server_connected)(void);
 static char identity[40], ap_ssid[33], csrf[33], ws_header[180];
+static char http_interface[IFNAMSIZ];
+static volatile bool dns_active;
+static TaskHandle_t dns_worker;
+static volatile uint32_t portal_redirects, portal_pages, dns_queries;
+/* DHCP keeps the URI pointer rather than copying it. */
+static char captive_api_url[] = EP_CAPTIVE_API_URL;
 static char ws_rx[32768];
 static size_t ws_used;
 static volatile bool wifi_connected, ws_connected, setup_active, setup_requested, scan_busy;
 static bool ws_started, configured, setup_pending;
 static volatile uint32_t connected_at, reboot_at;
-static uint32_t disconnected_at, reconnect_at;
+static uint32_t disconnected_at, reconnect_at, setup_opened_at;
 static unsigned retry_seconds = 1;
 
 extern const char setup_html_start[] asm("_binary_setup_html_start");
@@ -85,6 +92,18 @@ void network_add_status(cJSON *data) {
     cJSON_AddBoolToObject(data, "wifi_connected", wifi_connected);
     cJSON_AddBoolToObject(data, "server_connected", ws_connected);
     cJSON_AddBoolToObject(data, "setup_active", setup_active);
+    cJSON_AddBoolToObject(data, "setup_http_ready", server != NULL);
+    cJSON_AddBoolToObject(data, "setup_dns_ready", dns_active);
+    cJSON_AddStringToObject(data, "setup_http_interface", http_interface);
+    char ap_interface[IFNAMSIZ] = {0};
+    if (ap_netif) esp_netif_get_netif_impl_name(ap_netif, ap_interface);
+    cJSON_AddStringToObject(data, "setup_ap_interface", ap_interface);
+    wifi_sta_list_t stations = {0};
+    if (setup_active) esp_wifi_ap_get_sta_list(&stations);
+    cJSON_AddNumberToObject(data, "setup_clients", stations.num);
+    cJSON_AddNumberToObject(data, "setup_page_requests", portal_pages);
+    cJSON_AddNumberToObject(data, "setup_redirects", portal_redirects);
+    cJSON_AddNumberToObject(data, "setup_dns_queries", dns_queries);
     cJSON_AddStringToObject(data, "ssid", config.ssid);
     esp_netif_ip_info_t info;
     char ip[16] = {0};
@@ -145,6 +164,7 @@ static esp_err_t json_response(httpd_req_t *req, cJSON *data, const char *status
     httpd_resp_set_type(req, "application/json; charset=utf-8");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
+    httpd_resp_set_hdr(req, "Connection", "close");
     esp_err_t result = httpd_resp_send(req, text, HTTPD_RESP_USE_STRLEN);
     free(text); return result;
 }
@@ -155,11 +175,35 @@ static esp_err_t json_error(httpd_req_t *req, const char *status, const char *me
 }
 
 static esp_err_t page_get(httpd_req_t *req) {
+    char host[128];
+    if (httpd_req_get_hdr_value_str(req, "Host", host, sizeof(host)) != ESP_OK ||
+        !ep_portal_is_local_host(host) || !ep_portal_is_root(req->uri)) {
+        ++portal_redirects;
+        httpd_resp_set_status(req, "302 Found");
+        httpd_resp_set_hdr(req, "Location", EP_SETUP_URL);
+        httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+        httpd_resp_set_hdr(req, "Connection", "close");
+        httpd_resp_set_type(req, "text/html; charset=utf-8");
+        /* A body is required by some Apple captive-network detectors. */
+        return httpd_resp_send(req, req->method == HTTP_HEAD ? "" :
+            "<!doctype html><html><head><title>epapers</title></head><body>"
+            "<a href=\"" EP_SETUP_URL "\">Open gateway setup</a></body></html>", HTTPD_RESP_USE_STRLEN);
+    }
+    ++portal_pages;
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Connection", "close");
     httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
     httpd_resp_set_hdr(req, "Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
-    return httpd_resp_send(req, setup_html_start, setup_html_end - setup_html_start - 1);
+    return httpd_resp_send(req, setup_html_start,
+        req->method == HTTP_HEAD ? 0 : setup_html_end - setup_html_start - 1);
+}
+
+static esp_err_t captive_get(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/captive+json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Connection", "close");
+    return httpd_resp_send(req, "{\"captive\":true,\"user-portal-url\":\"" EP_SETUP_URL "\"}", HTTPD_RESP_USE_STRLEN);
 }
 
 static esp_err_t status_get(httpd_req_t *req) {
@@ -171,7 +215,8 @@ static esp_err_t status_get(httpd_req_t *req) {
     cJSON_AddBoolToObject(data, "password_configured", config.password[0]);
     cJSON_AddStringToObject(data, "csrf", csrf);
     cJSON_AddStringToObject(data, "ap_ssid", ap_ssid);
-    unsigned remaining = connected_at && seconds() < connected_at + 60 ? connected_at + 60 - seconds() : 0;
+    uint32_t close_after = connected_at > setup_opened_at ? connected_at : setup_opened_at;
+    unsigned remaining = ws_connected && seconds() < close_after + 60 ? close_after + 60 - seconds() : 0;
     cJSON_AddNumberToObject(data, "hotspot_seconds", remaining);
     cJSON_AddBoolToObject(data, "restarting", reboot_at != 0);
     return json_response(req, data, "200 OK");
@@ -245,57 +290,51 @@ static esp_err_t scan_get(httpd_req_t *req) {
 static void dns_task(void *arg) {
     int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in bind_address = {.sin_family = AF_INET, .sin_port = htons(53), .sin_addr.s_addr = inet_addr("192.168.4.1")};
-    struct timeval timeout = {.tv_sec = 1};
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    struct timeval timeout = {.tv_sec = 0, .tv_usec = 250000};
+    if (fd >= 0) setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     if (fd < 0 || bind(fd, (struct sockaddr *)&bind_address, sizeof(bind_address))) {
-        if (fd >= 0) close(fd); vTaskDelete(NULL); return;
+        if (fd >= 0) close(fd); dns_worker = NULL; vTaskDelete(NULL); return;
     }
+    dns_active = true;
     uint8_t packet[512];
     while (setup_active) {
         struct sockaddr_in client; socklen_t client_size = sizeof(client);
-        int n = recvfrom(fd, packet, sizeof(packet) - 16, 0, (struct sockaddr *)&client, &client_size);
-        if (n < 17 || packet[4] != 0 || packet[5] != 1 || packet[2] & 0x80) continue;
-        size_t end = 12;
-        while (end < n && packet[end]) {
-            unsigned label = packet[end];
-            if (label > 63 || end + label + 1 >= n) { end = n; break; }
-            end += label + 1;
-        }
-        if (end + 5 > n) continue;
-        ++end;
-        bool ipv4 = packet[end] == 0 && packet[end + 1] == 1 && packet[end + 2] == 0 && packet[end + 3] == 1;
-        end += 4;
-        packet[2] = 0x81; packet[3] = 0x80; packet[6] = 0; packet[7] = ipv4;
-        memset(packet + 8, 0, 4);
-        if (ipv4) {
-            const uint8_t answer[] = {0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 30, 0, 4, 192, 168, 4, 1};
-            memcpy(packet + end, answer, sizeof(answer)); end += sizeof(answer);
-        }
-        sendto(fd, packet, end, 0, (struct sockaddr *)&client, client_size);
+        int n = recvfrom(fd, packet, sizeof(packet), 0, (struct sockaddr *)&client, &client_size);
+        size_t length = n > 0 ? ep_portal_dns_reply(packet, n, sizeof(packet)) : 0;
+        if (!length) continue;
+        ++dns_queries;
+        sendto(fd, packet, length, 0, (struct sockaddr *)&client, client_size);
     }
-    close(fd); vTaskDelete(NULL);
+    dns_active = false; close(fd); dns_worker = NULL; vTaskDelete(NULL);
 }
 
 static void start_setup(void) {
-    if (setup_active || reboot_at) return;
+    if (setup_active || reboot_at || dns_worker) return;
     wifi_config_t ap = {0};
     memcpy(ap.ap.ssid, ap_ssid, strlen(ap_ssid));
     ap.ap.ssid_len = strlen(ap_ssid); ap.ap.channel = 1; ap.ap.max_connection = 3;
     ap.ap.authmode = WIFI_AUTH_OPEN;
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
+    /* AP_START is asynchronous. Before it completes, the AP's lwIP index can
+       still resolve to lo0; binding HTTP then makes it unreachable to phones. */
+    unsigned attempts = 0;
+    while (!esp_netif_is_netif_up(ap_netif) && attempts++ < 150)
+        vTaskDelay(pdMS_TO_TICKS(20));
+    if (!esp_netif_is_netif_up(ap_netif)) return;
+    struct ifreq iface = {0};
+    if (esp_netif_get_netif_impl_name(ap_netif, iface.ifr_name) != ESP_OK ||
+        strncmp(iface.ifr_name, "ap", 2)) return;
     esp_netif_dns_info_t dns = {.ip = {.type = ESP_IPADDR_TYPE_V4}};
     dns.ip.u_addr.ip4.addr = inet_addr("192.168.4.1");
-    uint8_t offer = 2; /* DHCPS_OFFER_DNS */
+    uint8_t offer = 1;
     esp_netif_dhcps_stop(ap_netif);
-    esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER, &offer, sizeof(offer));
-    esp_netif_set_dns_info(ap_netif, ESP_NETIF_DNS_MAIN, &dns);
-    esp_netif_dhcps_start(ap_netif);
-    setup_active = true;
-    struct ifreq iface = {0};
-    ESP_ERROR_CHECK(esp_netif_get_netif_impl_name(ap_netif, iface.ifr_name));
+    ESP_ERROR_CHECK(esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER, &offer, sizeof(offer)));
+    ESP_ERROR_CHECK(esp_netif_set_dns_info(ap_netif, ESP_NETIF_DNS_MAIN, &dns));
+    ESP_ERROR_CHECK(esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI, captive_api_url, strlen(captive_api_url)));
+    snprintf(http_interface, sizeof(http_interface), "%s", iface.ifr_name);
     httpd_config_t http = HTTPD_DEFAULT_CONFIG();
-    http.stack_size = 8192; http.max_uri_handlers = 5; http.max_open_sockets = 4;
+    http.stack_size = 8192; http.max_uri_handlers = 6; http.max_open_sockets = 7;
     http.lru_purge_enable = true; http.recv_wait_timeout = 5; http.send_wait_timeout = 5;
     http.uri_match_fn = httpd_uri_match_wildcard; http.if_name = &iface;
     ESP_ERROR_CHECK(httpd_start(&server, &http));
@@ -303,10 +342,21 @@ static void start_setup(void) {
         {.uri = "/api/status", .method = HTTP_GET, .handler = status_get},
         {.uri = "/api/scan", .method = HTTP_GET, .handler = scan_get},
         {.uri = "/api/config", .method = HTTP_POST, .handler = config_post},
-        {.uri = "/*", .method = HTTP_GET, .handler = page_get}
+        {.uri = "/captive-portal", .method = HTTP_GET, .handler = captive_get},
+        {.uri = "/*", .method = HTTP_GET, .handler = page_get},
+        {.uri = "/*", .method = HTTP_HEAD, .handler = page_get}
     };
     for (unsigned i = 0; i < sizeof(handlers) / sizeof(handlers[0]); ++i) ESP_ERROR_CHECK(httpd_register_uri_handler(server, &handlers[i]));
-    xTaskCreate(dns_task, "setup-dns", 3072, NULL, 3, NULL);
+    setup_active = true;
+    if (xTaskCreate(dns_task, "setup-dns", 3072, NULL, 3, &dns_worker) != pdPASS) {
+        setup_active = false; httpd_stop(server); server = NULL; return;
+    }
+    for (unsigned i = 0; !dns_active && dns_worker && i < 50; ++i) vTaskDelay(pdMS_TO_TICKS(20));
+    if (!dns_active) {
+        setup_active = false; httpd_stop(server); server = NULL; return;
+    }
+    setup_opened_at = seconds();
+    ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
     /* Setup hotspot is intentionally open, per the device owner preference. */
     printf("EP_SETUP:{\"ssid\":\"%s\",\"open\":true,\"url\":\"http://192.168.4.1\"}\n", ap_ssid); fflush(stdout);
 }
@@ -332,12 +382,13 @@ static void monitor(void *arg) {
             if (!disconnected_at) disconnected_at = now;
             if (now - disconnected_at >= 60) setup_requested = true;
         } else disconnected_at = 0;
-        if (setup_requested) { start_setup(); setup_requested = false; }
+        if (setup_requested) { start_setup(); if (setup_active) setup_requested = false; }
         if (configured && !wifi_connected && !scan_busy && now >= reconnect_at) {
             esp_wifi_connect(); reconnect_at = now + retry_seconds;
             retry_seconds = retry_seconds < 15 ? retry_seconds * 2 : 30;
         }
-        if (setup_active && ws_connected && connected_at && now - connected_at >= 60 && !reboot_at && !scan_busy) {
+        if (setup_active && ws_connected && connected_at && now >= setup_opened_at &&
+            now - setup_opened_at >= 60 && now - connected_at >= 60 && !reboot_at && !scan_busy) {
             setup_active = false;
             if (server) { httpd_stop(server); server = NULL; }
             esp_wifi_set_mode(WIFI_MODE_STA);

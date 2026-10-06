@@ -129,6 +129,45 @@ def test_gateway_auth_and_telemetry(tmp_path):
         assert device["last_refresh"] is None
 
 
+@pytest.mark.parametrize("source", ["direct", "external"])
+def test_status_response_replaces_voltage_and_sample_time(tmp_path, source):
+    with (
+        TestClient(create_app(settings(tmp_path))) as client,
+        client.websocket_connect(
+            "/ws/gateway", headers={"Authorization": "Bearer private-gateway"}
+        ) as ws,
+    ):
+        ws.send_json({"type": "hello", "gateway_id": "g"})
+        ws.receive_json()
+        ws.send_json({
+            "type": "telemetry", "device_id": "tag", "address": "CA:BB:CC:DD:EE:FF",
+            "supply_mv": 3900, "battery_sampled_at": 1750000000,
+        })
+        ws.send_json({"type": "time_request"})
+        ws.receive_json()
+        client.put("/api/devices/tag/options", json={"name": "屏幕", "battery_source": source})
+        job = client.post("/api/devices/tag/commands/status").json()
+        command = ws.receive_json()
+        assert command["kind"] == "status" and command["device_id"] == "tag"
+        assert command["job_id"] == job["id"]
+        for state in ["transferring", "received"]:
+            ws.send_json({"type": "ack", "job_id": job["id"], "state": state})
+        ws.send_json({
+            "type": "telemetry", "device_id": "tag", "address": "CA:BB:CC:DD:EE:FF",
+            "supply_mv": 3700, "battery_sampled_at": 1750000030,
+        })
+        ws.send_json({"type": "ack", "job_id": job["id"], "state": "applied"})
+        ws.send_json({"type": "time_request"})
+        ws.receive_json()
+        state = client.get("/api/state").json()
+        device = state["devices"][0]
+        assert device["supply_mv"] == 3700 and device["battery_sampled_at"] == 1750000030
+        assert device["battery_mv"] == (3700 if source == "direct" else None)
+        assert device["battery_percent"] == (35 if source == "direct" else None)
+        assert device["last_refresh"] is None
+        assert next(j for j in state["jobs"] if j["id"] == job["id"])["state"] == "applied"
+
+
 def test_gateway_name_room_survive_disconnect_reconnect_and_restart(tmp_path):
     config = settings(tmp_path)
     headers = {"Authorization": "Bearer private-gateway"}

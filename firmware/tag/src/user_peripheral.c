@@ -41,7 +41,9 @@ static void tick(void){
 }
 static void ack_encode(ep_ack ack){
  uint8_t payload[64]={ack.result,ack.applied,core.clock.valid,ep_clock_needs_sync(&core.clock),255,255,255,core.panel_model,panel_diag.error,panel_diag.group};
- if(supply_mv==65535||core.clock.monotonic_ms-supply_sample_ms>=600000){
+ /* Explicit status reads take a fresh voltage sample; display acknowledgements
+  * retain the ten-minute cache to avoid sampling for every transfer packet. */
+ if((ack.command==EP_STATUS&&ack.result==EP_OK)||supply_mv==65535||core.clock.monotonic_ms-supply_sample_ms>=600000){
   adc_offset_calibrate(ADC_INPUT_MODE_SINGLE_ENDED);uint32_t samples=0;for(unsigned i=0;i<8;i++)samples+=adc_get_vbat_sample(false);
   supply_mv=(samples*225+512)>>10;supply_sample_ms=core.clock.monotonic_ms;
  }
@@ -50,7 +52,7 @@ static void ack_encode(ep_ack ack){
  memcpy(payload+22,EP_BUILD_VERSION,sizeof(EP_BUILD_VERSION));
  for(unsigned i=0;i<4;i++)payload[38+i]=ep_suota_diag.identity>>(8*i);
 #else
- memcpy(payload+22,"0.3.1-ram",10);
+ memcpy(payload+22,"0.3.3-ram",10);
 #endif
  int16_t temp=panel_diag.temperature_centi;payload[42]=temp;payload[43]=temp>>8;
  uint64_t age=temp==INT16_MIN?65535:(core.clock.monotonic_ms-panel_diag.temperature_sample_ms)/1000;

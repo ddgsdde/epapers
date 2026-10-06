@@ -205,7 +205,7 @@ if args.suota:
     generated.write_text(source)
     sources = [generated if p == suota_app else p for p in sources]
     (work / "src/ep_build.h").write_text(
-        f'#define EP_BUILD_VERSION "0.3.2-{secrets.token_hex(4)}"\n'
+        f'#define EP_BUILD_VERSION "0.3.3-{secrets.token_hex(4)}"\n'
     )
 boot = sdk / "sdk/platform/arch/boot/GCC"
 sources += [

@@ -85,6 +85,7 @@ GHCR 和 Release 预构建镜像仅包含 amd64，其他架构可从源码构建
 - DA14585 源码覆盖层：`firmware/tag/src`；构建脚本：`scripts/build_tag.py`。需自行取得官方 SDK6，并用 `--sdk` 和 `--toolchain` 指定 SDK 与 GNU Arm 工具链。
 - 首次有线安装后，墨水屏可通过网页 → 网关 → BLE SUOTA 升级。原部署包提供网关 0.3.0、墨水屏 0.3.1 和墨水屏 0.3.0 回退镜像；[网关 0.3.2 Release](https://github.com/ddgsdde/epapers/releases/tag/gateway-v0.3.2) 提供修复版手机配网网关更新 `epapers-gateway-0.3.2.bin`。
 - 多块墨水屏初装请使用 [墨水屏 0.3.2 Release](https://github.com/ddgsdde/epapers/releases/tag/tag-v0.3.2)。同一个 BIN 根据每颗芯片的出厂 OTP 数据生成稳定的独立蓝牙地址；旧版 BIN 内置测试板地址，多块烧入会被识别为同一个设备。迁移步骤见 [屏幕身份与烧录](docs/tag-device-identity.md)。
+- [墨水屏 0.3.3 Release](https://github.com/ddgsdde/epapers/releases/tag/tag-v0.3.3) 保留独立地址修复，并让“读取状态”主动采样当前电压；普通画布传输仍使用 10 分钟采样缓存。网页与 HA 集成会同步新读数，工作台和网关无需升级。
 - 项目不包含官方 SDK、用户提供的参考固件、本机凭据、用户数据或原始硬件备份。字体授权文件与字体一起保存于 `assets/fonts`。
 
 测试与构建：
@@ -95,6 +96,6 @@ uv run ruff check backend tests
 npm --prefix frontend run build
 ```
 
-当前记录：186 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。0.3.2 的屏幕身份修复已完成 SDK 地址生成测试和固件构建，两块实物同时发现仍待验证。网关手机配网修复增加热点接口、HTTP / DNS 状态和请求计数诊断。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
+当前记录：190 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。0.3.2 的屏幕身份修复已完成 SDK 地址生成测试和固件构建，两块实物同时发现仍待验证。0.3.3 已验证状态命令重新采样、传输回执复用缓存和工作台接收新读数，新的实物电压采样尚待烧录验证。网关手机配网修复增加热点接口、HTTP / DNS 状态和请求计数诊断。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
 
 参考项目：[tpunix/HMCLOCK](https://github.com/tpunix/HMCLOCK)。

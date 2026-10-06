@@ -19,26 +19,29 @@ Home Assistant 墨水屏工作台：在本机或群晖 Docker 编辑 2.13 寸黑
 
 ## 群晖安装：使用现成镜像
 
-[下载 v0.3.1 Release](https://github.com/ddgsdde/epapers/releases/tag/v0.3.1)。完整部署包为 `epapers-synology-0.3.1-amd64.zip`，适用于 x86 / amd64 群晖。仓库及 Release 为私有，需要使用有权限的 GitHub 账号下载。
+[GitHub 容器镜像](https://github.com/ddgsdde/epapers/pkgs/container/epapers)：`ghcr.io/ddgsdde/epapers:0.3.1`，适用于 x86 / amd64 群晖。源码、Release 与容器包保持私有，使用有权限的 GitHub 账号访问。
 
-1. 解压到共享文件夹，例如 `/volume1/docker/epapers`。
-2. 在 Container Manager 中导入 `epapers-0.3.1-amd64.image.tar.gz`，镜像名称为 `epapers:0.3.1`。SSH 可执行：
+1. 从 [v0.3.1 Release](https://github.com/ddgsdde/epapers/releases/tag/v0.3.1) 下载 `compose.yaml` 和 `env.example`，放到共享文件夹，例如 `/volume1/docker/epapers`，将 `env.example` 重命名为 `.env`。也可使用完整部署包。
+2. 为有包访问权限的 GitHub 账号创建具有 `read:packages` 权限的 Personal access token (classic)。SSH 登录群晖，在 Docker 命令使用的同一账号下执行下列命令，在 Password 提示输入该令牌（不是 GitHub 密码，也不是 HA Key）：
 
    ```sh
-   docker load -i epapers-0.3.1-amd64.image.tar.gz
+   docker login ghcr.io -u ddgsdde
    ```
 
-3. 将 `.env.example` 复制为 `.env`，设置两个不同的随机值：`EPAPERS_API_TOKEN` 和 `EPAPERS_GATEWAY_TOKEN`。HA 地址与 Key 可稍后在网页填写。
-4. Container Manager → 项目 → 新增，选择同目录的 `compose.yaml`。SSH 可执行：
+3. 在 `.env` 设置两个不同的随机值：`EPAPERS_API_TOKEN` 和 `EPAPERS_GATEWAY_TOKEN`。HA 地址与 Key 可稍后在网页填写。
+4. 在项目目录执行：
 
    ```sh
+   docker compose pull
    docker compose up -d
    ```
 
 5. 打开 `http://群晖地址:8099`，输入 `.env` 中的 `EPAPERS_API_TOKEN`。在“设置”保存 HA Base URL 与长期访问令牌；保存后 Key 不回显，留空则保留已有 Key。
 6. 配置网关服务器地址 `ws://群晖地址:8099/ws/gateway` 和 `.env` 中的 `EPAPERS_GATEWAY_TOKEN`。
 
-`compose.yaml` 使用已经导入的本地镜像。Release 同时提供单独镜像、Compose 文件、环境变量示例、HA 集成和固件。所有用户数据位于 `./data`，升级时保留并备份该目录及 `.env`。
+`compose.yaml` 直接拉取 GHCR 镜像。若用 Container Manager 图形界面创建项目，需要在其映像仓库配置中设置 GHCR 的账号与令牌；SSH 的登录凭据不会自动共享给图形界面。所有用户数据位于 `./data`，升级时保留并备份该目录及 `.env`。
+
+完整部署包中的 `.image.tar.gz` 保留作离线安装：`docker load -i epapers-0.3.1-amd64.image.tar.gz`，使用包内的 `compose.offline.yaml`。在线安装无需下载镜像压缩包。
 
 详细说明见 [群晖部署](docs/synology.md) 和 [轮播、独立同步间隔与升级](docs/firmware-and-carousel.md)。
 
@@ -65,7 +68,7 @@ uv run epapers
 docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
-Release 预构建镜像仅包含 amd64，其他架构可从源码构建，尚未做实机验证。
+GHCR 和 Release 预构建镜像仅包含 amd64，其他架构可从源码构建，尚未做实机验证。GitHub Actions 的 `Publish container to GHCR` 支持手动发布或 `v*` 标签触发；镜像版本必须与 `pyproject.toml` 一致，上传后自动验证拉取和容器运行。
 
 ## HA 集成
 

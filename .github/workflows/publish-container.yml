@@ -1,0 +1,114 @@
+name: Publish container to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Image version (must match pyproject.toml)
+        required: true
+        default: "0.3.1"
+        type: string
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-container
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate version and image name
+        id: image
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, re, tomllib
+          from pathlib import Path
+          version = os.environ.get("REQUESTED_VERSION") or os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          actual = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          if not re.fullmatch(r"\d+\.\d+\.\d+", version) or version != actual:
+              raise SystemExit(f"Version {version!r} does not match project version {actual!r}")
+          image = "ghcr.io/" + os.environ["GITHUB_REPOSITORY"].lower()
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"name={image}\nversion={version}\n")
+          PY
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish
+        id: publish
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ steps.image.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.image.outputs.version }}
+            org.opencontainers.image.title=epapers
+            org.opencontainers.image.description=Home Assistant e-paper studio and BLE gateway coordinator
+      - name: Pull published image and verify runtime
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ steps.image.outputs.version }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE:$VERSION"
+          docker pull "$IMAGE@$DIGEST"
+          docker image inspect "$IMAGE:$VERSION" --format '{{json .RepoDigests}}' | grep -F "$DIGEST"
+          docker run --rm -e EXPECTED_VERSION="$VERSION" "$IMAGE@$DIGEST" python -c 'import importlib.metadata, os; assert importlib.metadata.version("epapers") == os.environ["EXPECTED_VERSION"]'
+          trap 'docker logs epapers-registry-check; docker rm -f epapers-registry-check' EXIT
+          docker run -d --name epapers-registry-check --read-only --cap-drop=ALL \
+            --security-opt=no-new-privileges:true --memory=512m \
+            --tmpfs /tmp:size=32m --tmpfs /data:size=32m \
+            -e EPAPERS_DEMO=false -e EPAPERS_API_TOKEN=ci-api-smoke \
+            -e EPAPERS_GATEWAY_TOKEN=ci-gateway-smoke \
+            -p 127.0.0.1:8101:8099 "$IMAGE@$DIGEST"
+          python3 - <<'PY'
+          import json, time, urllib.request
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8101/health", timeout=3) as response:
+                      assert json.load(response)["status"] == "ok"
+                  break
+              except Exception:
+                  if attempt == 29:
+                      raise
+                  time.sleep(2)
+          with urllib.request.urlopen("http://127.0.0.1:8101/", timeout=5) as response:
+              assert b"<html" in response.read()
+          request = urllib.request.Request("http://127.0.0.1:8101/api/ha/integration.zip", headers={"Authorization": "Bearer ci-api-smoke"})
+          with urllib.request.urlopen(request, timeout=5) as response:
+              assert response.read().startswith(b"PK")
+          PY
+          docker exec epapers-registry-check python -c 'from PIL import ImageFont; from pathlib import Path; fonts=list(Path("/app/assets/fonts").glob("*.ttf")); assert len(fonts)>=8; [ImageFont.truetype(str(p), 20) for p in fonts]; print("fonts loaded:", len(fonts))'
+          {
+            echo "Published and pulled: \`$IMAGE:$VERSION\`"
+            echo ""
+            echo "Digest: \`$DIGEST\`"
+            echo ""
+            echo "Source commit: \`$GITHUB_SHA\`"
+            echo ""
+            echo "Verified amd64 runtime, read-only filesystem, 512 MB memory limit, Web UI, HA integration and fonts."
+          } >> "$GITHUB_STEP_SUMMARY"

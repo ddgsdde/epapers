@@ -1,0 +1,58 @@
+FONT_CATALOG = [
+    {
+        "id": "sans",
+        "name": "思源黑体",
+        "file": "NotoSansSC.ttf",
+        "sample": "温度 23.6°C",
+        "weights": [400, 500, 700, 900],
+    },
+    {
+        "id": "rounded",
+        "name": "寒蝉全圆体",
+        "file": "ChillRoundF.ttf",
+        "sample": "圆润 温湿度",
+        "weights": [400, 500, 700, 900],
+    },
+    {
+        "id": "soft",
+        "name": "寒蝉半圆体",
+        "file": "ChillRoundM.ttf",
+        "sample": "柔和 客厅",
+        "weights": [400, 500, 700, 900],
+    },
+    {
+        "id": "serif",
+        "name": "思源宋体",
+        "file": "NotoSerifSC.ttf",
+        "sample": "日期与生活",
+        "weights": [400, 500, 700, 900],
+    },
+    {
+        "id": "wenkai",
+        "name": "霞鹜文楷",
+        "file": "LXGWWenKai-Regular.ttf",
+        "sample": "书房的温度",
+        "weights": [400, 500, 700],
+    },
+    {
+        "id": "inter",
+        "name": "Inter 数字",
+        "file": "Inter.ttf",
+        "sample": "123.6 kWh",
+        "weights": [400, 500, 700, 900],
+    },
+    {
+        "id": "condensed",
+        "name": "Barlow 窄体",
+        "file": "BarlowCondensed-Regular.ttf",
+        "sample": "12:34 568W",
+        "weights": [400, 700],
+    },
+    {
+        "id": "digital",
+        "name": "DSEG 数码",
+        "file": "DSEG7Classic-Regular.ttf",
+        "sample": "12:34",
+        "weights": [400, 700],
+    },
+]

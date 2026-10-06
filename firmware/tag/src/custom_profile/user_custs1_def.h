@@ -1,0 +1,5 @@
+#ifndef EP_CUSTOM_PROFILE_H
+#define EP_CUSTOM_PROFILE_H
+#include "attm_db_128.h"
+enum {SVC1_IDX_SVC, EP_RX_CHAR, EP_RX_VAL, EP_TX_CHAR, EP_TX_VAL, CUSTS1_IDX_NB};
+#endif

@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "连接 epapers 工作台",
+        "description": "填写本机或群晖工作台的地址及 API 密钥。",
+        "data": {
+          "url": "工作台地址",
+          "token": "工作台 API 密钥"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接工作台",
+      "invalid_auth": "API 密钥无效",
+      "invalid_url": "请填写 http:// 或 https:// 地址"
+    },
+    "abort": {
+      "already_configured": "此工作台已配置"
+    }
+  }
+}

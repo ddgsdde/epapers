@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(epapers_core C)
+add_library(epapers_core STATIC ep_core.c)
+target_include_directories(epapers_core PUBLIC .)
+target_compile_options(epapers_core PRIVATE -Wall -Wextra -Werror -Wno-misleading-indentation)

@@ -1,0 +1,12 @@
+.local
+.env
+.env.*
+.envrc*
+data
+.git
+.venv
+frontend/node_modules
+frontend/dist
+frontend/*.tsbuildinfo
+firmware
+tests

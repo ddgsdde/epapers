@@ -1,0 +1,28 @@
+set_text:
+  name: 修改文本
+  description: 修改指定屏幕中的文本组件，并自动排队更新。
+  fields:
+    tag_id:
+      required: true
+      selector: {text: {}}
+    widget_id:
+      required: true
+      selector: {text: {}}
+    text:
+      required: true
+      selector: {text: {multiline: true}}
+set_entity:
+  name: 绑定实体
+  description: 修改指定组件的数据来源。
+  fields:
+    tag_id:
+      required: true
+      selector: {text: {}}
+    widget_id:
+      required: true
+      selector: {text: {}}
+    entity_id:
+      required: true
+      selector: {entity: {}}
+    attribute:
+      selector: {text: {}}

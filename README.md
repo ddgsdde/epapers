@@ -1,0 +1,91 @@
+# epapers
+
+Home Assistant 墨水屏工作台：在本机或群晖 Docker 编辑 2.13 寸黑白屏画布，通过 ESP32-S3 蓝牙网关下发至 DA14585。HA 提供实体和历史记录，字体与渲染在工作台运行。
+
+## 功能
+
+- 画布编辑、中文字体与字重、多种内置模板、用户模板复用。
+- HA 实体按房间、设备、领域和类别筛选；温湿度、功率、状态及数值属性显示。
+- HA Recorder 趋势图、自定义历史时长、15 分钟网格和数值标注。
+- 每块屏幕独立设置内容同步间隔，30～86400 秒；趋势图定时读取历史，显示包相同则跳过发送。
+- MCU 本地时钟、日期与倒计时；断线重连和至少每 24 小时校时。
+- 整页轮播和组件轮播，停留时间按整数分钟设置；已下发内容可离线轮换。
+- 自动发现网关和屏幕、名称与房间配置、删除与恢复、任务和刷新状态观察。
+- 屏幕内部温度、供电电压和电量上报；配套 HA 集成同步设备和实体。
+- 网关网页 OTA、墨水屏 BLE SUOTA 批量升级，重启后核对固件标识。
+- 小变化快速刷新，大变化与整点清残影使用全刷；A41 每次仍写完整控制器 RAM，避免断电丢失 RAM 后花屏。
+
+当前硬件实测为 HINK-E0213A41，70 字节 LUT、引脚组 6。HINK-E0213A55 和 OPM021B1 已通过主机协议与驱动模拟测试，对应实物尚待验证。只支持黑白屏。200mAh 电池续航尚未实测。
+
+## 群晖安装：使用现成镜像
+
+[下载 v0.3.1 Release](https://github.com/ddgsdde/epapers/releases/tag/v0.3.1)。完整部署包为 `epapers-synology-0.3.1-amd64.zip`，适用于 x86 / amd64 群晖。仓库及 Release 为私有，需要使用有权限的 GitHub 账号下载。
+
+1. 解压到共享文件夹，例如 `/volume1/docker/epapers`。
+2. 在 Container Manager 中导入 `epapers-0.3.1-amd64.image.tar.gz`，镜像名称为 `epapers:0.3.1`。SSH 可执行：
+
+   ```sh
+   docker load -i epapers-0.3.1-amd64.image.tar.gz
+   ```
+
+3. 将 `.env.example` 复制为 `.env`，设置两个不同的随机值：`EPAPERS_API_TOKEN` 和 `EPAPERS_GATEWAY_TOKEN`。HA 地址与 Key 可稍后在网页填写。
+4. Container Manager → 项目 → 新增，选择同目录的 `compose.yaml`。SSH 可执行：
+
+   ```sh
+   docker compose up -d
+   ```
+
+5. 打开 `http://群晖地址:8099`，输入 `.env` 中的 `EPAPERS_API_TOKEN`。在“设置”保存 HA Base URL 与长期访问令牌；保存后 Key 不回显，留空则保留已有 Key。
+6. 配置网关服务器地址 `ws://群晖地址:8099/ws/gateway` 和 `.env` 中的 `EPAPERS_GATEWAY_TOKEN`。
+
+`compose.yaml` 使用已经导入的本地镜像。Release 同时提供单独镜像、Compose 文件、环境变量示例、HA 集成和固件。所有用户数据位于 `./data`，升级时保留并备份该目录及 `.env`。
+
+详细说明见 [群晖部署](docs/synology.md) 和 [轮播、独立同步间隔与升级](docs/firmware-and-carousel.md)。
+
+## 从源码运行
+
+需要 Python 3.13、uv 和 Node.js / npm。在项目根目录执行：
+
+```sh
+uv sync --locked
+cp .env.example .env
+```
+
+编辑 `.env` 中的私有访问密钥，然后构建网页：
+
+```sh
+npm --prefix frontend ci
+npm --prefix frontend run build
+uv run epapers
+```
+
+访问 `http://127.0.0.1:8099`，在网页配置 HA。源码构建 Docker 使用：
+
+```sh
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
+
+Release 预构建镜像仅包含 amd64，其他架构可从源码构建，尚未做实机验证。
+
+## HA 集成
+
+从工作台“设置”下载，或使用 Release 中的 `epapers-ha-0.2.0.zip`。把 `epapers` 放入 HA 的 `/config/custom_components/epapers`，重启并添加 epapers 集成。地址填写工作台地址，密钥填写 `EPAPERS_API_TOKEN`。也可在 HA 网页仪表盘中嵌入工作台。
+
+## 固件与验证
+
+- 网关源码：`firmware/gateway`；构建脚本：`scripts/build_gateway.sh`。需要本机 ESP-IDF 环境。
+- DA14585 源码覆盖层：`firmware/tag/src`；构建脚本：`scripts/build_tag.py`。需自行取得官方 SDK6，并用 `--sdk` 和 `--toolchain` 指定 SDK 与 GNU Arm 工具链。
+- 首次有线安装后，墨水屏可通过网页 → 网关 → BLE SUOTA 升级。当前包提供网关 0.3.0、墨水屏 0.3.1 和墨水屏 0.3.0 回退镜像。
+- 项目不包含官方 SDK、用户提供的参考固件、本机凭据、用户数据或原始硬件备份。字体授权文件与字体一起保存于 `assets/fonts`。
+
+测试与构建：
+
+```sh
+uv run pytest -q
+uv run ruff check backend tests
+npm --prefix frontend run build
+```
+
+当前记录：121 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
+
+参考项目：[tpunix/HMCLOCK](https://github.com/tpunix/HMCLOCK)。

@@ -12,6 +12,8 @@
 #include "psa/crypto.h"
 
 static SemaphoreHandle_t lock;
+/* Protected by lock. Do not put the decoder buffer on the WebSocket task stack. */
+static uint8_t chunk[2048];
 static struct {bool active,tag;char id[40],sha[65];size_t size,offset;esp_ota_handle_t handle;uint8_t *image;int64_t touched;cJSON *meta;psa_hash_operation_t hash;} transfer;
 static const char *str(cJSON *data,const char *key){cJSON *value=cJSON_GetObjectItem(data,key);return cJSON_IsString(value)?value->valuestring:NULL;}
 bool ota_busy(void){return transfer.active;}
@@ -37,7 +39,7 @@ void ota_message(cJSON *data){
   if(!transfer.active||strcmp(id,transfer.id)){error="升级会话不匹配";goto fail;}
   transfer.touched=esp_timer_get_time();
   if(!strcmp(type,"ota_chunk")){
-   const char *encoded=str(data,"data");cJSON *offset=cJSON_GetObjectItem(data,"offset");uint8_t chunk[2048];size_t length=0;
+   const char *encoded=str(data,"data");cJSON *offset=cJSON_GetObjectItem(data,"offset");size_t length=0;
    if(!encoded||!cJSON_IsNumber(offset)||offset->valuedouble!=transfer.offset||mbedtls_base64_decode(chunk,sizeof(chunk),&length,(const unsigned char*)encoded,strlen(encoded))||!length||transfer.offset+length>transfer.size){error="固件数据顺序或长度错误";goto fail;}
    if(transfer.tag)memcpy(transfer.image+transfer.offset,chunk,length);else if(esp_ota_write(transfer.handle,chunk,length)!=ESP_OK){error="Flash 写入失败";goto fail;}
    if(psa_hash_update(&transfer.hash,chunk,length)!=PSA_SUCCESS){error="SHA 更新失败";goto fail;}

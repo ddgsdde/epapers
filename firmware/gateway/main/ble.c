@@ -42,7 +42,9 @@ static int char_cb(uint16_t conn,const struct ble_gatt_error *error,const struct
 static int gap_event(struct ble_gap_event *event,void *arg){
  switch(event->type){
  case BLE_GAP_EVENT_CONNECT:connection=event->connect.status?BLE_HS_CONN_HANDLE_NONE:event->connect.conn_handle;signal(event->connect.status);break;
- case BLE_GAP_EVENT_DISCONNECT:connection=BLE_HS_CONN_HANDLE_NONE;signal(BLE_HS_ENOTCONN);break;
+ case BLE_GAP_EVENT_DISCONNECT:
+  /* A late disconnect must not clear a newer connection or wake its waiter. */
+  if(connection==event->disconnect.conn.conn_handle){connection=BLE_HS_CONN_HANDLE_NONE;signal(BLE_HS_ENOTCONN);}break;
  case BLE_GAP_EVENT_DISC:{struct ble_hs_adv_fields fields;if(ble_hs_adv_parse_fields(&fields,event->disc.data,event->disc.length_data))break;
   bool ep=false;for(unsigned i=0;i<fields.num_uuids128;i++)if(!ble_uuid_cmp((ble_uuid_t*)&fields.uuids128[i],&service_uuid.u))ep=true;
   if(fields.name_len>=7&&!memcmp(fields.name,"epapers",7))ep=true;
@@ -55,13 +57,25 @@ static int gap_event(struct ble_gap_event *event,void *arg){
  default:break;
  }return 0;
 }
+static void disconnect_link(void){
+ uint16_t handle=connection;if(handle==BLE_HS_CONN_HANDLE_NONE)return;
+ if(ble_gap_terminate(handle,BLE_ERR_REM_USER_CONN_TERM)==BLE_HS_ENOTCONN){if(connection==handle)connection=BLE_HS_CONN_HANDLE_NONE;return;}
+ for(unsigned i=0;i<250&&connection==handle;i++)vTaskDelay(pdMS_TO_TICKS(20));
+}
 static bool connect_address(const char *text){
  ble_addr_t address={.type=BLE_ADDR_PUBLIC};unsigned values[6];
  if(sscanf(text,"%02x:%02x:%02x:%02x:%02x:%02x",&values[5],&values[4],&values[3],&values[2],&values[1],&values[0])!=6)return false;
  for(unsigned i=0;i<6;i++)address.val[i]=(uint8_t)values[i];bool known=false;for(unsigned i=0;i<seen_count;i++)if(!strcasecmp(seen[i].text,text)){address=seen[i].addr;known=true;}
  /* First operation after gateway reboot may precede discovery. Try both address types. */
  if(!known&&(address.val[5]&0xc0)==0xc0)address.type=BLE_ADDR_RANDOM;
- ble_gap_disc_cancel();bool connected=false;ota_phase="连接";for(unsigned attempt=0;attempt<(known?1:2);attempt++){clear_wait();if(wait_for(ble_gap_connect(own_type,&address,10000,NULL,gap_event,NULL),12000)){connected=true;break;}ble_gap_conn_cancel();vTaskDelay(pdMS_TO_TICKS(200));if(connection!=BLE_HS_CONN_HANDLE_NONE)break;address.type=address.type==BLE_ADDR_RANDOM?BLE_ADDR_PUBLIC:BLE_ADDR_RANDOM;}if(!connected)return false;
+ ble_gap_disc_cancel();bool connected=false;ota_phase="连接";
+ struct ble_gap_conn_desc existing;
+ if(!ble_gap_conn_find_by_addr(&address,&existing)){connection=existing.conn_handle;connected=true;}
+ else if(connection!=BLE_HS_CONN_HANDLE_NONE){disconnect_link();if(connection!=BLE_HS_CONN_HANDLE_NONE)return false;}
+ for(unsigned attempt=0;!connected&&attempt<(known?1:2);attempt++){clear_wait();if(wait_for(ble_gap_connect(own_type,&address,10000,NULL,gap_event,NULL),12000)){connected=true;break;}
+  if(operation_error==BLE_HS_HCI_ERR(BLE_ERR_ACL_CONN_EXISTS)&&!ble_gap_conn_find_by_addr(&address,&existing)){connection=existing.conn_handle;connected=true;break;}
+  ble_gap_conn_cancel();vTaskDelay(pdMS_TO_TICKS(200));if(connection!=BLE_HS_CONN_HANDLE_NONE)break;address.type=address.type==BLE_ADDR_RANDOM?BLE_ADDR_PUBLIC:BLE_ADDR_RANDOM;
+ }if(!connected)return false;
  ota_phase="MTU 协商";clear_wait();if(!wait_for(ble_gattc_exchange_mtu(connection,mtu_cb,NULL),5000)||ble_att_mtu(connection)<27)return false;
  ota_phase="显示服务发现";service_start=service_end=0;clear_wait();if(!wait_for(ble_gattc_disc_svc_by_uuid(connection,&service_uuid.u,service_cb,NULL),5000)||!service_start)return false;
  discovered_handle=0;clear_wait();if(!wait_for(ble_gattc_disc_chrs_by_uuid(connection,service_start,service_end,&rx_uuid.u,char_cb,NULL),5000)||!discovered_handle)return false;rx_handle=discovered_handle;
@@ -118,7 +132,7 @@ static void poll_telemetry(void){
    snprintf(key,sizeof(key),"da-%02x%02x%02x%02x%02x%02x",a[5],a[4],a[3],a[2],a[1],a[0]);
    cJSON_AddStringToObject(data,"device_id",key);cJSON_AddStringToObject(data,"address",seen[i].text);report(data,false);cJSON_Delete(data);
   }
-  if(connection!=BLE_HS_CONN_HANDLE_NONE){ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);vTaskDelay(pdMS_TO_TICKS(150));}
+  disconnect_link();
   break; /* One short connection per idle pass; display/OTA jobs take priority. */
  }
 }
@@ -142,11 +156,11 @@ static bool update_tag(cJSON *data,const uint8_t *image,size_t length){
  }
  ota_phase="镜像校验";dev=0xfe000000;if(!ota_write(mem,&dev,4)||!ota_status_read(status,2))return false;
  ota_phase="重启";gateway_ota_status(id,"rebooting",total,97,NULL,NULL);dev=0xfd000000;/* SDK may reboot before the ATT write response. The new CRC readback is mandatory below. */ota_write(mem,&dev,4);
- if(connection!=BLE_HS_CONN_HANDLE_NONE)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);
+ disconnect_link();
  vTaskDelay(pdMS_TO_TICKS(1800));
  ota_phase="重启身份核对";for(unsigned attempt=0;attempt<8;attempt++){
   if(connect_address(address)){bool applied=false;if(send_packet(EP_INFO,esp_random(),0,NULL,0,&applied)&&response_len>=58){char actual[9];snprintf(actual,sizeof(actual),"%08lx",(unsigned long)read32(response+50));report(data,false);if(!strcmp(actual,identity)){gateway_ota_status(id,"verified",length,100,NULL,actual);return true;}return false;}}
-  if(connection!=BLE_HS_CONN_HANDLE_NONE)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);vTaskDelay(pdMS_TO_TICKS(1000));
+  disconnect_link();vTaskDelay(pdMS_TO_TICKS(1000));
  }return false;
 }
 static void worker(void *arg){
@@ -154,7 +168,7 @@ static void worker(void *arg){
   if(string(data,"kind")&&!strcmp(string(data,"kind"),"firmware")){
    uint8_t *image=(uint8_t*)(uintptr_t)cJSON_GetObjectItem(data,"image_pointer")->valuedouble;size_t length=(size_t)cJSON_GetObjectItem(data,"image_length")->valuedouble;
    if(!update_tag(data,image,length)){char detail[128];snprintf(detail,sizeof(detail),"SUOTA %s失败（状态 0x%02x，BLE %d）",ota_phase?ota_phase:"未知阶段",ota_result,operation_error);gateway_ota_status(string(data,"id"),"failed",0,0,detail,NULL);}
-   free(image);if(connection!=BLE_HS_CONN_HANDLE_NONE)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);cJSON_Delete(data);vTaskDelay(pdMS_TO_TICKS(200));scan();continue;
+   free(image);disconnect_link();cJSON_Delete(data);vTaskDelay(pdMS_TO_TICKS(200));scan();continue;
   }
   const char *job=string(data,"job_id"),*address=string(data,"address"),*kind=string(data,"kind");bool ok=false,synced=false;const char *error="蓝牙连接或服务发现失败";
   if(job&&kind&&address&&ready&&connect_address(address)){
@@ -174,7 +188,7 @@ static void worker(void *arg){
    report(data,synced);
   }
   if(job)gateway_ack(job,ok?"applied":"failed",ok?NULL:error);
-  if(connection!=BLE_HS_CONN_HANDLE_NONE){ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);vTaskDelay(pdMS_TO_TICKS(150));}
+  disconnect_link();
   cJSON_Delete(data);scan();
  }
 }

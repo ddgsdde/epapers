@@ -422,7 +422,8 @@ void network_start(const char *gateway_id, void (*message)(cJSON *), void (*conn
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &station));
         snprintf(ws_header, sizeof(ws_header), "Authorization: Bearer %s\r\n", config.token);
         esp_websocket_client_config_t ws = {.uri = config.url, .headers = ws_header, .reconnect_timeout_ms = 5000,
-            .network_timeout_ms = 10000, .buffer_size = 2048, .crt_bundle_attach = esp_crt_bundle_attach};
+            /* OTA handlers execute on this task, including hash/Flash calls. */
+            .task_stack = 8192, .network_timeout_ms = 10000, .buffer_size = 2048, .crt_bundle_attach = esp_crt_bundle_attach};
         websocket = esp_websocket_client_init(&ws);
         ESP_ERROR_CHECK(esp_websocket_register_events(websocket, WEBSOCKET_EVENT_ANY, socket_event, NULL));
     }

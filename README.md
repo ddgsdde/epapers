@@ -73,7 +73,7 @@ GHCR 和 Release 预构建镜像仅包含 amd64，其他架构可从源码构建
 
 ## 网关手机配网
 
-网关 0.3.2 首次上电开启 `epapers-xxxxxx` 开放配网热点，手机连接不需要密码。连接后通过联网检测跳转到配网页面；也可手动打开 `http://192.168.4.1`，填写家中 2.4GHz Wi-Fi、电脑或群晖的工作台地址及 `EPAPERS_GATEWAY_TOKEN`，点击“保存并连接”。持续连接工作台 60 秒后关闭热点；运行时长按 BOOT 3 秒可再次开启。0.3.2 修复了热点可连接但网页拒绝连接的问题。完整流程见 [手机配网](docs/gateway-phone-setup.md)。
+网关 0.3.3 首次上电开启 `epapers-xxxxxx` 开放配网热点，手机连接不需要密码。连接后通过联网检测跳转到配网页面；也可手动打开 `http://192.168.4.1`，填写家中 2.4GHz Wi-Fi、电脑或群晖的工作台地址及 `EPAPERS_GATEWAY_TOKEN`，点击“保存并连接”。持续连接工作台 60 秒后关闭热点；运行时长按 BOOT 3 秒可再次开启。0.3.2 修复热点可连接但网页拒绝连接，0.3.3 修复 Wi-Fi OTA 请求引起 WebSocket 任务栈溢出重启、升级在 0% 等待确认超时的问题。完整流程见 [手机配网](docs/gateway-phone-setup.md)。
 
 ## HA 集成
 
@@ -82,6 +82,7 @@ GHCR 和 Release 预构建镜像仅包含 amd64，其他架构可从源码构建
 ## 固件与验证
 
 - 网关源码：`firmware/gateway`；构建脚本：`scripts/build_gateway.sh`。需要本机 ESP-IDF 环境。
+- [网关 0.3.3 Release](https://github.com/ddgsdde/epapers/releases/tag/gateway-v0.3.3) 修复 Wi-Fi OTA 的任务栈溢出，并处理蓝牙连接复用与断开等待。旧版网关在升级请求阶段重启时，需要先通过 USB 安装修复版，保留 NVS；工作台 Docker 无需更新。
 - DA14585 源码覆盖层：`firmware/tag/src`；构建脚本：`scripts/build_tag.py`。需自行取得官方 SDK6，并用 `--sdk` 和 `--toolchain` 指定 SDK 与 GNU Arm 工具链。
 - 首次有线安装后，墨水屏可通过网页 → 网关 → BLE SUOTA 升级。原部署包提供网关 0.3.0、墨水屏 0.3.1 和墨水屏 0.3.0 回退镜像；[网关 0.3.2 Release](https://github.com/ddgsdde/epapers/releases/tag/gateway-v0.3.2) 提供修复版手机配网网关更新 `epapers-gateway-0.3.2.bin`。
 - 多块墨水屏初装请使用 [墨水屏 0.3.2 Release](https://github.com/ddgsdde/epapers/releases/tag/tag-v0.3.2)。同一个 BIN 根据每颗芯片的出厂 OTP 数据生成稳定的独立蓝牙地址；旧版 BIN 内置测试板地址，多块烧入会被识别为同一个设备。迁移步骤见 [屏幕身份与烧录](docs/tag-device-identity.md)。
@@ -96,6 +97,6 @@ uv run ruff check backend tests
 npm --prefix frontend run build
 ```
 
-当前记录：190 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。0.3.2 的屏幕身份修复已完成 SDK 地址生成测试和固件构建，两块实物同时发现仍待验证。0.3.3 已验证状态命令重新采样、传输回执复用缓存和工作台接收新读数，新的实物电压采样尚待烧录验证。网关手机配网修复增加热点接口、HTTP / DNS 状态和请求计数诊断。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
+当前记录：195 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。0.3.2 的屏幕身份修复已用于一块实物并保持地址，两块实物同时发现仍待验证。网关 0.3.3 已通过真实 Wi-Fi 自身 OTA 和墨水屏 0.3.3 BLE SUOTA，均完成重启后固件标识核对。电压状态命令重新采样、传输回执复用缓存和工作台接收新读数的测试通过。网关手机配网修复增加热点接口、HTTP / DNS 状态和请求计数诊断。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
 
 参考项目：[tpunix/HMCLOCK](https://github.com/tpunix/HMCLOCK)。

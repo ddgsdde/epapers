@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>网关配网 · epapers</title>
+  <style>
+    :root{--ink:#18252c;--muted:#64747c;--line:#dce3e5;--accent:#087f73;--soft:#eef8f5;--error:#a52a32;--radius:10px}
+    *{box-sizing:border-box}body{margin:0;background:#fff;color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+    main{max-width:560px;margin:auto;padding:24px 22px 32px;padding-bottom:max(32px,env(safe-area-inset-bottom))}
+    header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:20px}.brand{font-size:16px;font-weight:700;letter-spacing:.03em;color:var(--accent);margin:0 0 16px}
+    h1{font-size:27px;line-height:1.25;letter-spacing:-.03em;margin:0 0 10px}p{margin:0}.intro,.hint{color:var(--muted);font-size:14px;line-height:1.55}.intro{max-width:42ch}
+    .status{display:flex;align-items:flex-start;gap:10px;padding:14px 15px;background:var(--soft);border-radius:var(--radius);margin-bottom:22px;min-height:72px}.dot{width:9px;height:9px;background:#91a5ab;border-radius:50%;flex-shrink:0;margin-top:7px}.dot.ok{background:var(--accent)}.dot.error{background:var(--error)}.status strong{font-size:15px;font-weight:650;display:block}.status p{font-size:13px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+    fieldset{border:0;padding:0;margin:0 0 24px;min-width:0}legend{font-size:18px;font-weight:650;padding:0;margin-bottom:14px;display:block;width:100%}
+    label{display:block;font-size:14px;font-weight:600;margin-bottom:7px}input,select,button{font:inherit}input,select{display:block;width:100%;height:48px;border:1px solid var(--line);border-radius:var(--radius);padding:11px 13px;background:#fff;color:var(--ink);min-width:0;outline:none}
+    input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #087f7316}input:disabled{background:#f4f6f7;color:var(--muted)}input::placeholder{font-size:14px;color:#849399}
+    .field{margin-bottom:14px}.field .hint{font-size:12px;margin-top:6px}.label-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}.label-row label{margin:0}
+    button{cursor:pointer;border:0;border-radius:var(--radius);min-height:44px;font-weight:600}button:disabled{opacity:.5;cursor:default}.scan{background:transparent;color:var(--accent);font-size:13px;padding:4px 0;min-height:32px}.scan:focus-visible{outline:2px solid var(--accent)}.networks{margin-top:8px}select{font-size:14px}
+    .password-field{position:relative}.password-field input{padding-right:67px}.reveal{position:absolute;right:5px;top:3px;min-height:42px;background:transparent;font-size:13px;color:var(--muted);padding:0 12px}
+    .checkbox{display:flex;align-items:center;gap:9px;color:var(--muted);font-weight:400;margin:10px 0 0;font-size:13px}.checkbox input{width:17px;height:17px;padding:0;accent-color:var(--accent)}
+    .submit{background:var(--accent);color:#fff;width:100%;height:50px;font-size:16px}.feedback{padding:12px 14px;margin-bottom:14px;border-radius:var(--radius);background:#fff2f1;color:var(--error);font-size:14px;overflow-wrap:anywhere}.feedback.success{background:var(--soft);color:var(--accent)}
+    .footer{font-size:12px;color:var(--muted);margin-top:13px;text-align:center}.device{border-top:1px solid var(--line);margin-top:25px;padding-top:14px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+    [hidden]{display:none!important}@media(min-width:700px){main{padding-top:44px}h1{font-size:30px}}
+  </style>
+</head>
+<body>
+<main>
+  <header><p class="brand">epapers</p><h1>连接墨水屏网关</h1><p class="intro">连接家中的 Wi-Fi，再填写工作台地址。配置保存在网关，断电后也会保留。</p></header>
+  <section class="status" aria-live="polite"><span class="dot" id="dot" aria-hidden="true"></span><div><strong id="statusTitle">正在读取网关状态</strong><p id="statusDetail">请保持连接 epapers 配网热点。</p></div></section>
+  <form id="form" autocomplete="off">
+    <fieldset>
+      <legend>Wi-Fi</legend>
+      <div class="field">
+        <div class="label-row"><label for="ssid">Wi-Fi 名称</label><button type="button" class="scan" id="scan">扫描附近 Wi-Fi</button></div>
+        <input id="ssid" name="ssid" required maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="填写名称，或扫描后选择">
+        <div class="networks" id="networks" hidden><label for="networkList" class="hint">附近的 2.4GHz 网络</label><select id="networkList"><option value="">选择 Wi-Fi</option></select></div>
+        <p class="hint" id="scanHint">支持 2.4GHz Wi-Fi，可手动填写隐藏网络。</p>
+      </div>
+      <div class="field"><label for="password">Wi-Fi 密码</label><div class="password-field"><input id="password" name="new-wifi-password" type="password" maxlength="64" autocomplete="new-password" placeholder="填写 Wi-Fi 密码"><button id="reveal" type="button" class="reveal" aria-label="显示新输入的 Wi-Fi 密码" aria-pressed="false">显示</button></div><p class="hint" id="passwordHint">已保存的密码不会显示。</p><label class="checkbox"><input type="checkbox" id="openWifi">这是无密码网络</label></div>
+    </fieldset>
+    <fieldset>
+      <legend>工作台</legend>
+      <div class="field"><label for="url">服务器地址</label><input id="url" name="server-url" type="text" inputmode="url" required maxlength="240" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="http://10.0.0.10:8099"><p class="hint">填写运行工作台的电脑或群晖地址，网关连接路径会自动补全。</p></div>
+      <div class="field"><label for="token">网关 Token</label><input id="token" name="new-gateway-token" type="password" maxlength="127" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="填写 EPAPERS_GATEWAY_TOKEN"><p class="hint" id="tokenHint">使用工作台的网关 Token，保存后不会回显。</p></div>
+    </fieldset>
+    <div id="feedback" class="feedback" role="status" hidden></div>
+    <button class="submit" id="save" type="submit" disabled>保存并连接</button>
+    <p class="footer">连接工作台成功后，配网热点将在 1 分钟后关闭。</p>
+  </form>
+  <p class="device" id="device">ESP32-S3 · 手机配网</p>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  let csrf = '', restartCsrf = '', initial = false, saving = false, restarting = false, refreshing = false, savedSsid = '', savedPassword = false, selectedNetworks = [], lastStatus = null;
+  function notice(message, success = false) { $('feedback').textContent = message; $('feedback').classList.toggle('success', success); $('feedback').hidden = !message; }
+  async function api(path, options = {}) {
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(path, {...options, cache:'no-store', signal:controller.signal});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '请求失败，请重试');
+      return data;
+    } finally { clearTimeout(timer); }
+  }
+  function passwordState() {
+    $('password').disabled = $('openWifi').checked;
+    $('reveal').disabled = $('openWifi').checked;
+    const keep = savedPassword && $('ssid').value === savedSsid;
+    $('password').placeholder = keep ? '已保存；留空保留原密码' : '填写 Wi-Fi 密码';
+    $('passwordHint').textContent = keep ? '留空保留该 Wi-Fi 的密码，已有密码不会回显。' : '更换 Wi-Fi 时需填写新密码。';
+  }
+  function renderStatus(data) {
+    if (restarting && data.csrf === restartCsrf) { $('save').disabled = true; return; }
+    if (restarting && data.csrf !== restartCsrf) { restarting = false; restartCsrf = ''; }
+    lastStatus = data; csrf = data.csrf; savedSsid = data.ssid || ''; savedPassword = data.password_configured;
+    $('dot').className = data.server_connected ? 'dot ok' : 'dot';
+    if (data.server_connected) {
+      restarting = false;
+      $('statusTitle').textContent = '已连接工作台';
+      $('statusDetail').textContent = `${data.ssid} · ${data.ip}。热点将在 ${data.hotspot_seconds || 60} 秒后关闭，请回到家中 Wi-Fi 使用工作台。`;
+    } else if (data.wifi_connected) {
+      restarting = false;
+      $('statusTitle').textContent = 'Wi-Fi 已连接，正在连接工作台';
+      $('statusDetail').textContent = `${data.ssid} · ${data.ip}。若长时间未连接，请检查服务器地址与网关 Token。`;
+    } else {
+      $('statusTitle').textContent = data.ssid ? '正在连接 Wi-Fi' : '等待配置';
+      $('statusDetail').textContent = data.ssid ? `正在尝试连接 ${data.ssid}。连接失败时可在这里修改配置。` : '填写以下信息，开始连接家中的 Wi-Fi。';
+    }
+    $('device').textContent = `${data.ap_ssid} · 固件 ${data.firmware}`;
+    if (!initial) {
+      $('ssid').value = data.ssid || '';
+      $('url').value = (data.server_url || '').replace(/^ws:/,'http:').replace(/^wss:/,'https:').replace(/\/ws\/gateway\/?$/,'');
+      $('token').placeholder = data.token_configured ? '已保存；留空保留原 Token' : '填写 EPAPERS_GATEWAY_TOKEN';
+      $('token').required = !data.token_configured;
+      $('openWifi').checked = !!data.ssid && !data.password_configured;
+      initial = true; passwordState();
+    }
+    $('save').disabled = saving || !!data.restarting;
+  }
+  async function refresh() {
+    if (saving || refreshing) return;
+    refreshing = true;
+    try { renderStatus(await api('/api/status')); }
+    catch (error) {
+      if (lastStatus?.server_connected) {
+        $('statusTitle').textContent = '配网已完成';
+        $('statusDetail').textContent = '热点可能已关闭。切回家中的 Wi-Fi，打开工作台查看网关。';
+        $('save').disabled = true;
+      } else {
+        $('statusTitle').textContent = restarting ? '配置已保存，网关正在重启' : '暂时无法连接网关';
+        $('statusDetail').textContent = '请保持连接 epapers 配网热点；手机提示没有互联网时，选择继续使用此 Wi-Fi。';
+        $('save').disabled = true;
+      }
+    } finally { refreshing = false; }
+  }
+  $('ssid').addEventListener('input', passwordState);
+  $('openWifi').addEventListener('change', passwordState);
+  $('reveal').addEventListener('click', () => {
+    const show = $('password').type === 'password';
+    $('password').type = show ? 'text' : 'password'; $('reveal').textContent = show ? '隐藏' : '显示';
+    $('reveal').setAttribute('aria-pressed', String(show));
+  });
+  $('scan').addEventListener('click', async () => {
+    $('scan').disabled = true; $('scan').textContent = '正在扫描…';
+    try {
+      const data = await api('/api/scan'); selectedNetworks = data.networks;
+      $('networkList').replaceChildren(new Option('选择 Wi-Fi', ''));
+      selectedNetworks.forEach((n, i) => $('networkList').add(new Option(`${n.ssid} · ${n.rssi >= -60 ? '信号强' : n.rssi >= -75 ? '信号一般' : '信号弱'}${n.open ? ' · 无密码' : ''}`, String(i))));
+      $('networks').hidden = !selectedNetworks.length;
+      $('scanHint').textContent = selectedNetworks.length ? `找到 ${selectedNetworks.length} 个网络，也可手动输入。` : '未发现网络，可重试或手动填写名称。';
+    } catch (error) { $('scanHint').textContent = error.name === 'AbortError' ? '扫描超时，请重试或手动填写。' : error.message; }
+    finally { $('scan').disabled = false; $('scan').textContent = '重新扫描'; }
+  });
+  $('networkList').addEventListener('change', () => {
+    if ($('networkList').value === '') return;
+    const network = selectedNetworks[Number($('networkList').value)];
+    $('ssid').value = network.ssid; $('openWifi').checked = network.open;
+    $('password').value = ''; passwordState(); if (!network.open) $('password').focus();
+  });
+  $('form').addEventListener('submit', async event => {
+    event.preventDefault(); if (saving || !csrf) return;
+    if (new TextEncoder().encode($('ssid').value).length > 32) { notice('Wi-Fi 名称最多为 32 字节，中文名称请注意长度。'); return; }
+    if (!$('openWifi').checked && !$('password').value && (!savedPassword || $('ssid').value !== savedSsid)) { notice('请填写 Wi-Fi 密码，或选择无密码网络。'); $('password').focus(); return; }
+    if (!$('openWifi').checked && $('password').value && new TextEncoder().encode($('password').value).length < 8) { notice('Wi-Fi 密码至少需要 8 字节。'); $('password').focus(); return; }
+    saving = true; $('save').disabled = true; $('save').textContent = '正在保存…'; notice('');
+    try {
+      await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json','X-Setup-Token':csrf}, body:JSON.stringify({ssid:$('ssid').value,password:$('password').value,url:$('url').value.trim(),token:$('token').value,open_wifi:$('openWifi').checked})});
+      $('password').value = ''; $('token').value = ''; $('password').type = 'password'; $('reveal').textContent = '显示'; $('reveal').setAttribute('aria-pressed','false');
+      restarting = true; restartCsrf = csrf; initial = false; csrf = ''; lastStatus = null;
+      notice('配置已保存，网关将重启连接。请保持连接配网热点，等待连接结果。', true);
+      $('statusTitle').textContent = '正在连接新配置'; $('statusDetail').textContent = '重启约需几秒。热点短暂断开后，请重新连接同名热点。';
+    } catch (error) { notice(error.name === 'AbortError' ? '保存超时，请检查网关状态后再重试。' : error.message); }
+    finally { saving = false; $('save').disabled = restarting; $('save').textContent = '保存并连接'; }
+  });
+  refresh(); setInterval(refresh, 3000);
+</script>
+</body>
+</html>

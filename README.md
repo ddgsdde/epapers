@@ -13,6 +13,7 @@ Home Assistant 墨水屏工作台：在本机或群晖 Docker 编辑 2.13 寸黑
 - 自动发现网关和屏幕、名称与房间配置、删除与恢复、任务和刷新状态观察。
 - 屏幕内部温度、供电电压和电量上报；配套 HA 集成同步设备和实体。
 - 网关网页 OTA、墨水屏 BLE SUOTA 批量升级，重启后核对固件标识。
+- ESP32-S3 手机热点配网：扫描 Wi-Fi、填写服务器地址和网关 Token，保存后重连；密码与 Token 不回显。
 - 小变化快速刷新，大变化与整点清残影使用全刷；A41 每次仍写完整控制器 RAM，避免断电丢失 RAM 后花屏。
 
 当前硬件实测为 HINK-E0213A41，70 字节 LUT、引脚组 6。HINK-E0213A55 和 OPM021B1 已通过主机协议与驱动模拟测试，对应实物尚待验证。只支持黑白屏。200mAh 电池续航尚未实测。
@@ -70,6 +71,10 @@ docker compose -f compose.yaml -f compose.build.yaml up -d --build
 
 GHCR 和 Release 预构建镜像仅包含 amd64，其他架构可从源码构建，尚未做实机验证。GitHub Actions 的 `Publish container to GHCR` 支持手动发布或 `v*` 标签触发；镜像版本必须与 `pyproject.toml` 一致，上传后自动验证拉取和容器运行。
 
+## 网关手机配网
+
+网关 0.3.1 首次上电开启 `epapers-xxxxxx` 开放配网热点，手机连接不需要密码。手机连接后打开 `http://192.168.4.1`，填写家中 2.4GHz Wi-Fi、电脑或群晖的工作台地址及 `EPAPERS_GATEWAY_TOKEN`，点击“保存并连接”。持续连接工作台 60 秒后关闭热点；运行时长按 BOOT 3 秒可再次开启。完整流程见 [手机配网](docs/gateway-phone-setup.md)。
+
 ## HA 集成
 
 从工作台“设置”下载，或使用 Release 中的 `epapers-ha-0.2.0.zip`。把 `epapers` 放入 HA 的 `/config/custom_components/epapers`，重启并添加 epapers 集成。地址填写工作台地址，密钥填写 `EPAPERS_API_TOKEN`。也可在 HA 网页仪表盘中嵌入工作台。
@@ -78,7 +83,7 @@ GHCR 和 Release 预构建镜像仅包含 amd64，其他架构可从源码构建
 
 - 网关源码：`firmware/gateway`；构建脚本：`scripts/build_gateway.sh`。需要本机 ESP-IDF 环境。
 - DA14585 源码覆盖层：`firmware/tag/src`；构建脚本：`scripts/build_tag.py`。需自行取得官方 SDK6，并用 `--sdk` 和 `--toolchain` 指定 SDK 与 GNU Arm 工具链。
-- 首次有线安装后，墨水屏可通过网页 → 网关 → BLE SUOTA 升级。当前包提供网关 0.3.0、墨水屏 0.3.1 和墨水屏 0.3.0 回退镜像。
+- 首次有线安装后，墨水屏可通过网页 → 网关 → BLE SUOTA 升级。原部署包提供网关 0.3.0、墨水屏 0.3.1 和墨水屏 0.3.0 回退镜像；Release 另提供手机配网网关更新 `epapers-gateway-0.3.1.bin`。
 - 项目不包含官方 SDK、用户提供的参考固件、本机凭据、用户数据或原始硬件备份。字体授权文件与字体一起保存于 `assets/fonts`。
 
 测试与构建：
@@ -89,6 +94,6 @@ uv run ruff check backend tests
 npm --prefix frontend run build
 ```
 
-当前记录：121 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
+当前记录：149 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
 
 参考项目：[tpunix/HMCLOCK](https://github.com/tpunix/HMCLOCK)。

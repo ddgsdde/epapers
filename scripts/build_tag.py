@@ -94,18 +94,12 @@ text = cfg.read_text().replace("ARCH_EXT_SLEEP_OTP_COPY_ON", "ARCH_EXT_SLEEP_ON"
 text = text.replace("DLG-PRPH", "epapers-tag")
 text = text.replace(".max_mtu = 23", ".max_mtu = 247")
 text = text.replace("MS_TO_TIMERUNITS(1250)", "MS_TO_TIMERUNITS(2000)")
-address_file = ROOT / ".local/hardware/tag-address.txt"
-address_file.parent.mkdir(parents=True, exist_ok=True)
-if not address_file.exists():
-    value = bytearray(secrets.token_bytes(6))
-    value[0] |= 0xC0
-    address_file.write_text(":".join(f"{v:02X}" for v in value))
-address = bytes.fromhex(address_file.read_text().strip().replace(":", ""))
 text = text.replace("APP_CFG_ADDR_PUB", "APP_CFG_ADDR_STATIC")
-text = text.replace(
-    ".addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}",
-    ".addr = {" + ", ".join(f"0x{v:02x}" for v in reversed(address)) + "}",
-)
+# Leave the SDK's all-zero address unset. The callback below derives a stable
+# per-chip address from manufacturing OTP data instead of embedding one board's
+# address in a firmware image shared by every screen.
+if ".addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}" not in text:
+    raise ValueError("SDK peripheral configuration must have an unset device address")
 text = text.replace(
     "\\x59\\x5A\\x08\\xE4\\x86\\x2A\\x9E\\x8F\\xE9\\x11\\xBC\\x7C\\x98\\x43\\x42\\x18",
     "\\x01\\xe0\\xbe\\x1b\\xa4\\x94\\xb4\\x9c\\x48\\x4c\\x31\\x6e\\x01\\x00\\xa0\\xe3",
@@ -122,8 +116,13 @@ callback.write_text(
     callback.read_text().replace(
         ".app_on_db_init_complete            = default_app_on_db_init_complete",
         ".app_on_db_init_complete            = user_app_db_init_complete",
+    ).replace(
+        ".app_on_generate_static_random_addr = default_app_generate_static_random_addr",
+        ".app_on_generate_static_random_addr = default_app_generate_unique_static_random_addr",
     )
 )
+if "= default_app_generate_unique_static_random_addr," not in callback.read_text():
+    raise ValueError("SDK peripheral must use the per-chip stable address callback")
 if args.suota:
     args.lto = True
     periph.write_text(
@@ -141,7 +140,9 @@ if args.suota:
             "EXCLUDE_DLG_SUOTAR          (0)",
         ),
         ("da14585_config_basic.h", "#undef CFG_SPI_FLASH_ENABLE", "#define CFG_SPI_FLASH_ENABLE"),
-        ("da14585_config_advanced.h", "(34560)", "(35584)"),
+        # The retained payload is 35,064 bytes. Reserve 35,328, keeping the
+        # complete payload/heaps/1,536-byte stack and room for address setup.
+        ("da14585_config_advanced.h", "(34560)", "(35328)"),
         (
             "da14585_config_advanced.h",
             "CFG_MAX_TX_PACKET_LENGTH        (251)",
@@ -204,7 +205,7 @@ if args.suota:
     generated.write_text(source)
     sources = [generated if p == suota_app else p for p in sources]
     (work / "src/ep_build.h").write_text(
-        f'#define EP_BUILD_VERSION "0.3.1-{secrets.token_hex(4)}"\n'
+        f'#define EP_BUILD_VERSION "0.3.2-{secrets.token_hex(4)}"\n'
     )
 boot = sdk / "sdk/platform/arch/boot/GCC"
 sources += [

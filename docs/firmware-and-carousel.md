@@ -38,6 +38,8 @@ uv run python scripts/build_tag.py --suota --work .local/tag-suota
 
 输出 build/tag.img 用于以后网页升级，build/tag-factory.bin 包含本地官方引导程序和首次镜像，用于首次有线安装。SDK 和官方引导程序仅在本机使用，不包含在群晖镜像中。项目不写入 OTP。
 
+墨水屏 0.3.2 使用 SDK6 的 `default_app_generate_unique_static_random_addr`，读取芯片出厂 OTP 数据生成地址。同一个首次安装 BIN 可用于多块屏幕，正常出厂数据不同的芯片会有不同地址；同一块重启和升级后保持地址。旧版构建把本机测试板的地址写入镜像，多块使用会被合并。已有重复地址的屏幕需要逐块有线重装，然后重新发现与配置；详细步骤见 [屏幕身份与烧录](tag-device-identity.md)。
+
 scripts/install_tag.py 是面向已确认空白 FM25Q04 的首次安装工具，必须先读取、核对并保存完整的 512KB Flash 备份，再用 --suota --probe-flash --install-flash 构建和加载 RAM 编程器。工具只允许逐扇区编程、读回核对，并在最后提交产品头；不能用它直接覆盖已有非空 Flash。
 
 接收端升级仅写入当前运行镜像以外的分区，完成全部数据并核对 CRC 后标记镜像有效。网关发出重启命令后重新连接读取镜像 CRC；MCU 在重启前未回复最后一条 ATT 写请求时，也必须完成这个身份核对才能显示升级完成。

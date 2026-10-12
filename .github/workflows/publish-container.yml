@@ -6,7 +6,7 @@ on:
       version:
         description: Image version (must match pyproject.toml)
         required: true
-        default: "0.3.1"
+        default: "0.3.2"
         type: string
   push:
     tags: ["v*"]
@@ -86,11 +86,12 @@ jobs:
             -e EPAPERS_GATEWAY_TOKEN=ci-gateway-smoke \
             -p 127.0.0.1:8101:8099 "$IMAGE@$DIGEST"
           python3 - <<'PY'
-          import json, time, urllib.request
+          import json, os, time, urllib.request
           for attempt in range(30):
               try:
                   with urllib.request.urlopen("http://127.0.0.1:8101/health", timeout=3) as response:
-                      assert json.load(response)["status"] == "ok"
+                      health = json.load(response)
+                      assert health == {"status": "ok", "version": os.environ["VERSION"]}
                   break
               except Exception:
                   if attempt == 29:
@@ -112,3 +113,23 @@ jobs:
             echo ""
             echo "Verified amd64 runtime, read-only filesystem, 512 MB memory limit, Web UI, HA integration and fonts."
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Export verified image for offline installation
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ steps.image.outputs.version }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/epapers-container-release"
+          docker tag "$IMAGE@$DIGEST" "epapers:$VERSION"
+          docker save "epapers:$VERSION" | gzip -n > "$RUNNER_TEMP/epapers-container-release/epapers-$VERSION-amd64.image.tar.gz"
+          cd "$RUNNER_TEMP/epapers-container-release"
+          sha256sum *.image.tar.gz > SHA256SUMS.txt
+      - name: Keep offline installation image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: epapers-${{ steps.image.outputs.version }}-amd64-offline
+          path: ${{ runner.temp }}/epapers-container-release/*
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14

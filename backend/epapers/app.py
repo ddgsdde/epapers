@@ -16,6 +16,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
 
+from . import __version__
 from .config import Settings
 from .fonts import FONT_CATALOG
 from .ha_config import HAConnection
@@ -133,7 +134,7 @@ def create_app(settings=None):
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "0.2.0"}
+        return {"status": "ok", "version": __version__}
 
     @app.get("/api/ha/integration.zip", dependencies=[Depends(auth)])
     async def ha_integration():

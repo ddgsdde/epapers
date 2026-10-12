@@ -2,8 +2,8 @@
 
 工作台运行在群晖 Container Manager 中。群晖负责 HA API 订阅、字体、渲染、页面与日志存储；ESP32-S3 通过 WebSocket 连接群晖；HA 只运行轻量原生集成。
 
-1. 从 [GitHub Release](https://github.com/ddgsdde/epapers/releases/tag/v0.3.1) 下载 `compose.yaml` 和 `env.example`（私有仓库需登录），放到 `/volume1/docker/epapers`（路径按共享文件夹调整）。也可解压完整部署包。单独下载的 `env.example` 重命名为 `.env`；完整包则从 `.env.example` 创建 `.env`。
-2. 镜像托管在 [GHCR](https://github.com/ddgsdde/epapers/pkgs/container/epapers)，名称为 `ghcr.io/ddgsdde/epapers:0.3.1`。私有包拉取需要有权限的 GitHub 账号和带 `read:packages` 权限的 Personal access token (classic)。SSH 使用 `docker login ghcr.io -u ddgsdde`，在 Password 提示输入令牌。登录和 Compose 应使用同一系统账号；Container Manager 图形界面需另行配置 GHCR 仓库凭据。在 `.env` 填写两个不同的随机 API/网关密钥。HA 地址和长期访问令牌可稍后在网页设置中保存。私有 `.env` 不包含在镜像中。
+1. 从 [GitHub Release](https://github.com/ddgsdde/epapers/releases/tag/v0.3.2) 下载 `compose.yaml` 和 `env.example`（私有仓库需登录），放到 `/volume1/docker/epapers`（路径按共享文件夹调整）。也可解压完整部署包。单独下载的 `env.example` 重命名为 `.env`；完整包则从 `.env.example` 创建 `.env`。
+2. 镜像托管在 [GHCR](https://github.com/ddgsdde/epapers/pkgs/container/epapers)，名称为 `ghcr.io/ddgsdde/epapers:0.3.2`。私有包拉取需要有权限的 GitHub 账号和带 `read:packages` 权限的 Personal access token (classic)。SSH 使用 `docker login ghcr.io -u ddgsdde`，在 Password 提示输入令牌。登录和 Compose 应使用同一系统账号；Container Manager 图形界面需另行配置 GHCR 仓库凭据。在 `.env` 填写两个不同的随机 API/网关密钥。HA 地址和长期访问令牌可稍后在网页设置中保存。私有 `.env` 不包含在镜像中。
 3. SSH 在项目目录执行 `docker compose pull`，再执行 `docker compose up -d`。也可在配置好 GHCR 凭据后使用 Container Manager → 项目 → 新增，选择 `compose.yaml`。从源码构建则使用 `docker compose -f compose.yaml -f compose.build.yaml up -d --build`。
 4. 打开 `http://群晖地址:8099`。第一次访问输入 `.env` 中的 `EPAPERS_API_TOKEN`，再到“设置”配置 HA Base URL 和 API Key。Key 保存后不能在页面中查看，留空则保留现有 Key。
 5. 把 ESP32-S3 的服务器配置为 `ws://群晖地址:8099/ws/gateway`，并填入 `EPAPERS_GATEWAY_TOKEN`。USB 桥接只用于本机联调。
@@ -16,8 +16,8 @@
 
 整页轮播与组件轮播都在工作台保存后统一传到 MCU，断开网关仍按整数分钟轮换。希望降低大幅画面切换时，关闭整页轮播，只使用组件轮播。编辑好的画布可保存为“我的模板”。“固件”页面可上传网关应用 `.bin` 和墨水屏 `.img`，并逐台确认重启后的固件标识；墨水屏无线升级需要先安装支持 SUOTA 的基础固件。当前实机已安装 Flash 基础固件，见 [验证记录](implementation.md)。
 
-在线镜像为 `ghcr.io/ddgsdde/epapers:0.3.1`。升级时更新 Compose 中的版本并执行 `docker compose pull && docker compose up -d`，保留 `data` 和 `.env`。x86 群晖使用 `linux/amd64` 镜像，ARM 群晖应从源码构建对应 `linux/arm64` 镜像。项目中不包含本机凭据、用户数据、SDK 或原始硬件备份。
+在线镜像为 `ghcr.io/ddgsdde/epapers:0.3.2`。升级时更新 Compose 中的版本并执行 `docker compose pull && docker compose up -d`，保留 `data` 和 `.env`。x86 群晖使用 `linux/amd64` 镜像，ARM 群晖应从源码构建对应 `linux/arm64` 镜像。项目中不包含本机凭据、用户数据、SDK 或原始硬件备份。
 
-离线安装可使用完整部署包：`docker load -i epapers-0.3.1-amd64.image.tar.gz`，再用 `docker compose -f compose.offline.yaml up -d`。该文件使用本地镜像 `epapers:0.3.1`。
+离线安装可使用完整部署包：`docker load -i epapers-0.3.2-amd64.image.tar.gz`，再用 `docker compose -f compose.offline.yaml up -d`。该文件使用本地镜像 `epapers:0.3.2`。
 
 参考：[HA 网页仪表盘](https://www.home-assistant.io/dashboards/dashboards/#webpage-dashboard)、[HA 原生协调器](https://developers.home-assistant.io/docs/integration_fetching_data/)。

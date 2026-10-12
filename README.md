@@ -20,9 +20,9 @@ Home Assistant 墨水屏工作台：在本机或群晖 Docker 编辑 2.13 寸黑
 
 ## 群晖安装：使用现成镜像
 
-[GitHub 容器镜像](https://github.com/ddgsdde/epapers/pkgs/container/epapers)：`ghcr.io/ddgsdde/epapers:0.3.1`，适用于 x86 / amd64 群晖。源码、Release 与容器包保持私有，使用有权限的 GitHub 账号访问。
+[GitHub 容器镜像](https://github.com/ddgsdde/epapers/pkgs/container/epapers)：`ghcr.io/ddgsdde/epapers:0.3.2`，适用于 x86 / amd64 群晖。源码、Release 与容器包保持私有，使用有权限的 GitHub 账号访问。
 
-1. 从 [v0.3.1 Release](https://github.com/ddgsdde/epapers/releases/tag/v0.3.1) 下载 `compose.yaml` 和 `env.example`，放到共享文件夹，例如 `/volume1/docker/epapers`，将 `env.example` 重命名为 `.env`。也可使用完整部署包。
+1. 从 [v0.3.2 Release](https://github.com/ddgsdde/epapers/releases/tag/v0.3.2) 下载 `compose.yaml` 和 `env.example`，放到共享文件夹，例如 `/volume1/docker/epapers`，将 `env.example` 重命名为 `.env`。也可使用完整部署包。
 2. 为有包访问权限的 GitHub 账号创建具有 `read:packages` 权限的 Personal access token (classic)。SSH 登录群晖，在 Docker 命令使用的同一账号下执行下列命令，在 Password 提示输入该令牌（不是 GitHub 密码，也不是 HA Key）：
 
    ```sh
@@ -42,7 +42,9 @@ Home Assistant 墨水屏工作台：在本机或群晖 Docker 编辑 2.13 寸黑
 
 `compose.yaml` 直接拉取 GHCR 镜像。若用 Container Manager 图形界面创建项目，需要在其映像仓库配置中设置 GHCR 的账号与令牌；SSH 的登录凭据不会自动共享给图形界面。所有用户数据位于 `./data`，升级时保留并备份该目录及 `.env`。
 
-完整部署包中的 `.image.tar.gz` 保留作离线安装：`docker load -i epapers-0.3.1-amd64.image.tar.gz`，使用包内的 `compose.offline.yaml`。在线安装无需下载镜像压缩包。
+完整部署包中的 `.image.tar.gz` 保留作离线安装：`docker load -i epapers-0.3.2-amd64.image.tar.gz`，使用包内的 `compose.offline.yaml`。在线安装无需下载镜像压缩包。
+
+本次工作台 0.3.2 部署包汇总网关 0.3.3、墨水屏 0.3.3、HA 集成和 Compose；各组件版本独立。
 
 详细说明见 [群晖部署](docs/synology.md) 和 [轮播、独立同步间隔与升级](docs/firmware-and-carousel.md)。
 
@@ -97,6 +99,6 @@ uv run ruff check backend tests
 npm --prefix frontend run build
 ```
 
-当前记录：195 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。0.3.2 的屏幕身份修复已用于一块实物并保持地址，两块实物同时发现仍待验证。网关 0.3.3 已通过真实 Wi-Fi 自身 OTA 和墨水屏 0.3.3 BLE SUOTA，均完成重启后固件标识核对。电压状态命令重新采样、传输回执复用缓存和工作台接收新读数的测试通过。网关手机配网修复增加热点接口、HTTP / DNS 状态和请求计数诊断。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
+当前记录：195 项主机测试通过、1 项跳过；已验证真实 HA 历史读取、功率页面自动下发、逐屏同步间隔、双分区正常 OTA 和 A41 显示。两块实物已运行墨水屏 0.3.3，使用不同的稳定地址，同时在线并通过状态读取、电压更新与画布下发验证。网关 0.3.3 已通过真实 Wi-Fi 自身 OTA 和墨水屏 0.3.3 BLE SUOTA，均完成重启后固件标识核对。电压状态命令重新采样、传输回执复用缓存和工作台接收新读数的测试通过。网关手机配网修复增加热点接口、HTTP / DNS 状态和请求计数诊断。参考 [实施记录](docs/implementation.md) 与 [屏幕驱动分析](docs/panel-firmware-analysis.md)。
 
 参考项目：[tpunix/HMCLOCK](https://github.com/tpunix/HMCLOCK)。

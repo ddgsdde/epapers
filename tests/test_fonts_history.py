@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -36,6 +37,9 @@ def test_all_templates_fit_and_compile(profile):
 
 @pytest.mark.asyncio
 async def test_history_uses_ha_rows_and_preserves_unavailable_gaps(monkeypatch):
+    now = datetime.fromisoformat("2026-10-06T12:00:00+00:00").timestamp()
+    monkeypatch.setattr("epapers.ha.time.time", lambda: now)
+
     async def noop(_):
         pass
 

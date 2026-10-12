@@ -1,6 +1,6 @@
 services:
   epapers:
-    image: ghcr.io/ddgsdde/epapers:0.3.1
+    image: ghcr.io/ddgsdde/epapers:0.3.2
     container_name: epapers
     restart: unless-stopped
     env_file: .env

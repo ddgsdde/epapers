@@ -1,4 +1,4 @@
 services:
   epapers:
-    image: epapers:0.3.1
+    image: epapers:0.3.2
     build: .
